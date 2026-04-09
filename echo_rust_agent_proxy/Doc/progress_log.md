@@ -43,7 +43,7 @@ We kept the proven parts (tmux session management, marker-based output capture, 
 [Session](https://github.com/charlesericwilson-portfolio/Echo_rust_agent_proxyv5/blob/main/echo_rust_agent_proxy/screenshots/ifconfig.png)
 - Safety deny list – Active and enforced
 - Clean output capture via markers – Only new output returned (big improvement over full session history)
-  Capture](https://github.com/charlesericwilson-portfolio/Echo_rust_agent_proxyv5/blob/main/echo_rust_agent_proxy/screenshots/multiple_summarized.png)
+[Capture](https://github.com/charlesericwilson-portfolio/Echo_rust_agent_proxyv5/blob/main/echo_rust_agent_proxy/screenshots/multiple_summarized.png)
 - Summarizer integration – Produces usable high-signal summaries for noisy commands
 [Problems](https://github.com/charlesericwilson-portfolio/Echo_rust_agent_proxyv5/blob/main/echo_rust_agent_proxy/screenshots/summarization_problems.png)
 [Over_summarized](https://github.com/charlesericwilson-portfolio/Echo_rust_agent_proxyv5/blob/main/echo_rust_agent_proxy/screenshots/over_summarized.png)
