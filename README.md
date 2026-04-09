@@ -1,4 +1,5 @@
 # Echo_rust_agent_proxy
+Continuation of [Echo tmux agentv3](https://github.com/charlesericwilson-portfolio/Echo_tmux_agentv3) and adds poxy tool calls + output summarization. 
 ```mermaid
 flowchart TD
     A[User sends prompt] --> B[LLM / Echo]
