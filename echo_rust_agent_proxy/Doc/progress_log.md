@@ -56,7 +56,7 @@ We kept the proven parts (tmux session management, marker-based output capture, 
 - JSONL training data generation – Clean logs ready for next LoRA
 [Needs training](https://github.com/charlesericwilson-portfolio/Echo_rust_agent_proxyv5/blob/main/echo_rust_agent_proxy/screenshots/llm_being_difficult.png)
 
-[msfconsole](https://github.com/charlesericwilson-portfolio/Echo_rust_agent_proxyv5/blob/main/echo_rust_agent_proxy/screenshots/msf_help.png) 
+[msfconsole](../screenshots/msf_help.png) 
 
 ### Known Limitations (Honest)
 - Double-summarization still occurs (summarizer → Echo). Helpful for long/noisy output, sometimes excessive for short commands.
