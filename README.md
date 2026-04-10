@@ -53,11 +53,16 @@ This is the active development version of **Echo** — a lightweight, local red-
 **Not yet production-ready.** Persistent sessions with complex tools (full msfconsole workflows) are still being tuned. Context management and summarizer behavior continue to be refined. Database integration for auditing still to come.
 
 ### Quick Start
-```bash
+
  1. Make sure your llama.cpp servers are running
+```bash
+    - git clone https://github.com/ggml-org/llama.cpp
+    - cd llama.cpp
+    - cmake -B build
+    - cmake --build build --config Release -j$(nproc)
+```
     - Main model: port 8080
     - Summarizer (small model): port 8082
-```
  2. Install dependencies
 ```bash
     - sudo apt install tmux
