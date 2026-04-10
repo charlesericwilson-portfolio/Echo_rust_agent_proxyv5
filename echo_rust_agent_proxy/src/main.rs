@@ -32,7 +32,7 @@ You have one powerful tool:
 - Execute shell commands using: COMMAND: [full command here]
 
 IMPORTANT RULES:
-- I am not running the tools — you suggest them.
+- I am not running the tools — you are.
 - Output the tool call in exactly this format and nothing else on that line:
   COMMAND: the exact command you want to run
 - Stop after you output a tool call. Wait for the result before deciding the next step.
