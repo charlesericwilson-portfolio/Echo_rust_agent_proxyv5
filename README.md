@@ -54,10 +54,19 @@ This is the active development version of **Echo** — a lightweight, local red-
 
 ### Quick Start
 ```bash
-# 1. Make sure your llama.cpp servers are running
-#    - Main model: port 8080
-#    - Summarizer (small model): port 8082
-
-# 2. Build and run
-cargo build --release
-./target/release/echo_rust_wrapper
+ 1. Make sure your llama.cpp servers are running
+    - Main model: port 8080
+    - Summarizer (small model): port 8082
+```
+ 2. Install dependencies
+```bash
+    - sudo apt install tmux
+    - sudo apt install cargo
+    - sudo apt install rustup
+```
+ 3. **Build and run the Rust version**
+```bash
+  cd [build directory]
+  cargo build --release
+  ./target/release/echo_rust_wrapper
+  ```
