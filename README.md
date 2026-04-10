@@ -54,7 +54,7 @@ This is the active development version of **Echo** — a lightweight, local red-
 
 ### Quick Start
 
- 1. Make sure your llama.cpp servers are running
+ 1. Make sure your [llama.cpp](https://github.com/ggml-org/llama.cpp) servers are running
 ```bash
     - git clone https://github.com/ggml-org/llama.cpp
     - cd llama.cpp
