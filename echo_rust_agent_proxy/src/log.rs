@@ -17,10 +17,12 @@ pub async fn save_chat_log_entry(
     let mut messages = Vec::new();
 
     if !user_message.is_empty() {
-        messages.push(format!(
-            r#"{{"role": "user", "content": "{}"}}"#,
-            user_message.trim().replace('"', r#"\""#)
-        ));
+        let escaped = user_message.trim()
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r");
+        messages.push(format!(r#"{{"role": "user", "content": "{}"}}"#, escaped));
     }
 
     if !assistant_response.is_empty() {
@@ -34,10 +36,12 @@ pub async fn save_chat_log_entry(
             assistant_response.trim()
         };
 
-        messages.push(format!(
-            r#"{{"role": "assistant", "content": "{}"}}"#,
-            content.replace('"', r#"\""#)
-        ));
+        let escaped = content
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r");
+        messages.push(format!(r#"{{"role": "assistant", "content": "{}"}}"#, escaped));
     }
 
     let messages_str = messages.join(",");
