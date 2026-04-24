@@ -6,8 +6,6 @@ use tokio::time::{sleep, Duration};
 
 pub use crate::ACTIVE_SESSIONS;
 
-/// Start or reuse a tmux session
-/// Start or reuse a tmux session
 /// Start or reuse a tmux session with a persistent shell
 pub async fn start_or_reuse_session(_home: PathBuf, name: &str, _initial_command: &str) -> Result<()> {
     let exists = Command::new("tmux")
@@ -77,7 +75,7 @@ pub async fn execute_in_session(_home: PathBuf, session_name: &str, command: Str
         if let Some(end_pos) = after_start.find(&end_marker) {
             let fresh_output = &after_start[0..end_pos];
             let cleaned: String = fresh_output.lines()
-                .filter(|line| !line.trim().is_empty() && !line.trim().ends_with('$') && !line.trim().starts_with("eric@"))
+                .filter(|line| !line.trim().is_empty() && !line.trim().ends_with('$') && !line.trim().starts_with("eric@") && !line.trim().starts_with("echo '===ECHO_"))
                 .collect::<Vec<_>>()
                 .join("\n");
             return Ok(cleaned.trim().to_string());
