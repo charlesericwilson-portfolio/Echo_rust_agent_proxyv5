@@ -1,5 +1,5 @@
 # Echo_rust_agent_proxy
-Continuation of [Echo tmux agentv3](https://github.com/charlesericwilson-portfolio/Echo_tmux_agentv3) and adds poxy tool calls + output summarization. 
+Continuation of [Echo tmux agentv3](https://github.com/charlesericwilson-portfolio/Echo_tmux_agentv3) and adds poxy tool calls, output summarization, and database support. 
 ```mermaid
 flowchart TD
     A[User sends prompt] --> B[LLM / Echo]
@@ -41,6 +41,7 @@ This is the active development version of **Echo** — a lightweight, local red-
 - Safety deny list (blocks dangerous commands before execution)
 - JSONL logging in ShareGPT format (already capturing training examples of when/why to use SESSION vs COMMAND)
 - Fast blocking HTTP client talking to your local llama.cpp servers
+- Sqlite database support for tool logging.
 
 ### Current Status – In Active Testing
 - COMMAND method is stable and reliable
