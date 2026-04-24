@@ -329,6 +329,14 @@ async fn main() -> AnyhowResult<()> {
                 "role": "assistant",
                 "content": &response_text,
             }));
+
+            let total_chars: usize = messages.iter()
+                .map(|m| m["content"].as_str().unwrap_or("").len())
+                .sum();
+
+            if total_chars > 180_000 {
+                summarize_context(&mut messages).await?;
+            }
         }
     }
 
@@ -337,6 +345,44 @@ async fn main() -> AnyhowResult<()> {
 
     Ok(())
 
+}
+
+async fn summarize_context(messages: &mut Vec<Value>) -> anyhow::Result<()> {
+    let _summary_prompt = "Summarize the entire conversation so far in a concise way. Keep key facts, decisions, and important details. Output ONLY the summary, nothing else.";
+
+    let payload = json!({
+        "model": MODEL_NAME,
+        "messages": messages.clone(),
+        "temperature": 0.3,
+        "max_tokens": 1024
+    });
+
+    let response = reqwest::Client::new()
+        .post(API_URL)
+        .json(&payload)
+        .send()
+        .await?
+        .json::<Value>()
+        .await?;
+
+    let summary = response["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("Summary failed.")
+        .to_string();
+
+    // Keep system prompt + summary + last 4 turns
+    let last_turns: Vec<Value> = messages.iter().rev().take(4).cloned().collect();
+
+    let mut new_messages = vec![
+        messages[0].clone(), // system prompt
+        json!({"role": "assistant", "content": summary}),
+    ];
+    new_messages.extend(last_turns.into_iter().rev());
+
+    *messages = new_messages;
+    println!("{}[Context auto-summarized]{}", YELLOW, RESET_COLOR);
+
+    Ok(())
 }
 
 // Real summarizer - calls the small model on port 8082
