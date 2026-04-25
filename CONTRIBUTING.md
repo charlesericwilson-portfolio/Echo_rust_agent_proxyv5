@@ -1,5 +1,23 @@
 # Contributing to Echo_tmux_agentv3
 
+## Current Challenges
+
+### FIFO-Based Session Capture
+
+**Problem:** The current `send-keys` + `pipe-pane` approach works for most tools, but `nmap` (and potentially other long-running or interactive tools) doesn't behave reliably inside sessions. Output can be incomplete, garbled, or missing entirely.
+
+**Goal:** Move to a proper FIFO-based architecture where:
+- Commands are sent via FIFO to the tmux session
+- Output is captured cleanly via FIFO (no `capture-pane` snapshots)
+- Markers (`===ECHO_START_===` / `===ECHO_END_===`) are used to reliably extract command output
+- Sessions remain persistent and don't die unexpectedly
+
+**Why this matters:** Proper FIFO support would make `SESSION:` calls reliable for all tools, including nmap, Metasploit, and other interactive/long-running processes.
+
+**Skills needed:** Rust, tokio, tmux, named pipes (FIFO), async I/O
+
+If you're interested in tackling this, open an issue or start a discussion!
+
 Thanks for wanting to help! We appreciate all contributions. Here's the quick guide:
 
 1. **Fork** this repo.
