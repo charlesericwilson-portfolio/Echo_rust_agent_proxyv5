@@ -43,6 +43,7 @@ This is the active development version of **Echo** — a lightweight, local red-
 - Fast blocking HTTP client talking to your local llama.cpp servers
 - Sqlite database support for tool logging.
 - Auto summarization of context at 50K tokens.
+- Interrupt generation using ctl+\ end session using ctl+c.
 
 ### Current Status – In Active Testing
 - COMMAND method is stable and reliable
