@@ -27,6 +27,7 @@ flowchart TD
     style E fill:#facc15,stroke:#854d0e
     style K fill:#c084fc,stroke:#6b21a8
     style O fill:#c084fc,stroke:#6b21a8
+```
 ## Echo Rust Wrapper v5 (In Testing)
 
 **Current Version:** Rust v5 (Python proxy was v4)
