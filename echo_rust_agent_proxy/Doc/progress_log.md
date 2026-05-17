@@ -38,6 +38,7 @@ We kept the proven parts (tmux session management, marker-based output capture, 
 
 **Added Recently**
 - Sqlite database support for tool logging and better output capture.
+- Added an inner loop to main.rs to allow autonomously chaining tool calls across turns.
 
 ### Current Capabilities (v5)
 - **COMMAND:** method – Stable, one-shot commands, no summarizer
