@@ -66,17 +66,14 @@ Use SESSION:NAME command when you need a persistent or interactive session (like
 
 pub static ACTIVE_SESSIONS: Lazy<Mutex<HashMap<String, (String, String)>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 pub static SHUTDOWN_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
+pub static STOP_GENERATION: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[tokio::main]
 async fn main() -> AnyhowResult<()> {
     println!("Echo Rust Wrapper v2 – Async Tool Calls with Named Pipes");
     println!("Type 'quit' or 'exit' to stop.\n");
 
-pub static SHUTDOWN_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-pub static STOP_GENERATION: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-        // Handle graceful shutdowns + generation interrupt
+    // Handle graceful shutdowns + generation interrupt
     let mut termination = signal(SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
     let mut interrupt = signal(SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
     let mut quit = signal(SignalKind::quit()).expect("Failed to set up SIGQUIT handler");
@@ -90,7 +87,6 @@ pub static STOP_GENERATION: std::sync::atomic::AtomicBool = std::sync::atomic::A
             }
         }
     });
-
 
     let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/eric/Documents"));
     let context_path = PathBuf::from("/home/eric/echo/Echo_rag/Echo-context.txt");
@@ -112,8 +108,6 @@ pub static STOP_GENERATION: std::sync::atomic::AtomicBool = std::sync::atomic::A
         .expect("Failed to create Documents dir");
 
     let full_system_prompt = format!("{}\n\n{}", SYSTEM_PROMPT.trim(), context_content.trim());
-
-    //save_chat_log_entry(&home_dir, "", &full_system_prompt, "SESSION_START").await?;
 
     let mut messages = vec![
         json!({"role": "system", "content": full_system_prompt}),
@@ -203,184 +197,176 @@ pub static STOP_GENERATION: std::sync::atomic::AtomicBool = std::sync::atomic::A
             }
         };
 
-            STOP_GENERATION.store(false, std::sync::atomic::Ordering::SeqCst);
+        STOP_GENERATION.store(false, std::sync::atomic::Ordering::SeqCst);
 
-                // === TOOL CALL DETECTION ===
-            if let Some((session_name, command)) = extract_session_command(&response_text) {
-            println!("{}Echo: {}", LIGHT_BLUE, response_text.trim());
-            save_chat_log_entry(&home_dir, trimmed_input, &response_text, "assistant").await.unwrap();
-            messages.push(json!({"role": "assistant", "content": response_text.clone()}));
-            println!("{}Echo: Creating/reusing session '{}' and running '{}'.{}", LIGHT_BLUE, &session_name, &command, RESET_COLOR);
+        // === TOOL CALL DETECTION + AUTONOMOUS CHAINING ===
+        let mut current_response = response_text;
 
-            if let Err(e) = is_command_safe(&command) {
-                println!("{}Echo: {}", LIGHT_BLUE, response_text.trim());
-                println!("{}Safety block: {}{}", YELLOW, e, RESET_COLOR);
-                save_chat_log_entry(&home_dir, trimmed_input, &format!("Blocked: {}", e), "assistant").await.unwrap();
-                messages.push(json!({"role": "assistant", "content": format!("Safety block: {}", e)}));
-                continue;
-            }
+        loop {
+            if let Some((session_name, command)) = extract_session_command(&current_response) {
+                println!("{}Echo: {}", LIGHT_BLUE, current_response.trim());
+                save_chat_log_entry(&home_dir, trimmed_input, &current_response, "assistant").await.unwrap();
+                messages.push(json!({"role": "assistant", "content": current_response.clone()}));
+                println!("{}Echo: Creating/reusing session '{}' and running '{}'.{}", LIGHT_BLUE, &session_name, &command, RESET_COLOR);
 
-            start_or_reuse_session(home_dir.clone(), &session_name, &command).await?;
-            let raw_output = execute_in_session(home_dir.clone(), &session_name, command.to_string()).await?;
+                if let Err(e) = is_command_safe(&command) {
+                    println!("{}Echo: {}", LIGHT_BLUE, current_response.trim());
+                    println!("{}Safety block: {}{}", YELLOW, e, RESET_COLOR);
+                    save_chat_log_entry(&home_dir, trimmed_input, &format!("Blocked: {}", e), "assistant").await.unwrap();
+                    messages.push(json!({"role": "assistant", "content": format!("Safety block: {}", e)}));
+                } else {
+                    start_or_reuse_session(home_dir.clone(), &session_name, &command).await?;
+                    let raw_output = execute_in_session(home_dir.clone(), &session_name, command.to_string()).await?;
 
-            // === Safe summarizer call (won't crash) ===
-            let summary = match summarize_output(&raw_output).await {
-                Ok(s) => s,
-                Err(e) => {
-                    println!("{}Summarizer failed: {}{}", YELLOW, e, RESET_COLOR);
-                    format!("(Summarizer failed: {})", e)
+                    let summary = match summarize_output(&raw_output).await {
+                        Ok(s) => s,
+                        Err(e) => {
+                            println!("{}Summarizer failed: {}{}", YELLOW, e, RESET_COLOR);
+                            format!("(Summarizer failed: {})", e)
+                        }
+                    };
+
+                    db.log_tool_call(&session_name, &command, &summary)?;
+
+                    let tool_content = format!(
+                        "Tool output from SESSION '{}':\n{}",
+                        session_name, summary
+                    );
+
+                    println!("{}Echo: Session summary:\n{}{}", LIGHT_BLUE, summary, RESET_COLOR);
+
+                    save_chat_log_entry(&home_dir, trimmed_input, &tool_content, "assistant").await.unwrap();
+
+                    messages.push(json!({
+                        "role": "assistant",
+                        "content": current_response
+                    }));
+
+                    messages.push(json!({
+                        "role": "tool",
+                        "content": tool_content
+                    }));
                 }
-            };
 
-            db.log_tool_call(&session_name, &command, &summary)?;
+            } else if let Some((session_name, sub_command)) = extract_run_command(&current_response) {
+                let full_cmd = format!("run {}", sub_command.trim());
+                println!("{}Echo: {}", LIGHT_BLUE, current_response.trim());
+                save_chat_log_entry(&home_dir, trimmed_input, &current_response, "assistant").await.unwrap();
+                messages.push(json!({"role": "assistant", "content": current_response.clone()}));
 
-            let tool_content = format!(
-                "Tool output from SESSION '{}':\n{}",
-                session_name, summary
-            );
+                if let Err(e) = is_command_safe(&full_cmd) {
+                    println!("{}Safety block: {}{}", YELLOW, e, RESET_COLOR);
+                    save_chat_log_entry(&home_dir, trimmed_input, &format!("Blocked: {}", e), "assistant").await.unwrap();
+                    messages.push(json!({"role": "assistant", "content": format!("Safety block: {}", e)}));
+                } else {
+                    let output = execute_in_session(home_dir.clone(), &session_name, full_cmd).await?;
+                    let tool_content = format!("Tool output from SESSION '{}':\n{}", session_name, output);
+                    save_chat_log_entry(&home_dir, trimmed_input, &tool_content, "assistant").await.unwrap();
+                    messages.push(json!({"role": "tool", "content": tool_content}));
+                }
 
-            println!("{}Echo: Session summary:\n{}{}", LIGHT_BLUE, summary, RESET_COLOR);
+            } else if let Some(session_name) = extract_end_command(&current_response) {
+                println!("{}Echo: {}", LIGHT_BLUE, current_response.trim());
+                save_chat_log_entry(&home_dir, trimmed_input, &current_response, "assistant").await.unwrap();
+                messages.push(json!({"role": "assistant", "content": current_response.clone()}));
 
-            save_chat_log_entry(&home_dir, trimmed_input, &tool_content, "assistant").await.unwrap();
+                let _ = end_session(home_dir.clone(), &session_name).await;
+                let tool_content = format!("Session '{}' has been terminated.", session_name);
+                save_chat_log_entry(&home_dir, trimmed_input, &tool_content, "assistant").await.unwrap();
+                messages.push(json!({"role": "tool", "content": tool_content}));
 
-            messages.push(json!({
-            "role": "assistant",
-            "content": response_text
-            }));
+            } else if let Some(command) = extract_command(&current_response) {
+                println!("{}Echo: {}", LIGHT_BLUE, current_response.trim());
+                println!("{}Echo: Executing command:{}\n{}\n{}", LIGHT_BLUE, RESET_COLOR, command.trim(), RESET_COLOR);
+                save_chat_log_entry(&home_dir, trimmed_input, &current_response, "assistant").await.unwrap();
+                messages.push(json!({"role": "assistant", "content": current_response.clone()}));
 
-            messages.push(json!({
-                "role": "tool",
-                "content": tool_content
-            }));
+                if let Err(e) = is_command_safe(&command) {
+                    println!("{}Safety block: {}{}", YELLOW, e, RESET_COLOR);
+                    save_chat_log_entry(&home_dir, trimmed_input, &format!("Blocked: {}", e), "assistant").await.unwrap();
+                    messages.push(json!({"role": "assistant", "content": format!("Safety block: {}", e)}));
+                } else {
+                    let output_cmd = Command::new("sh")
+                        .arg("-c")
+                        .arg(command.trim())
+                        .output()
+                        .expect("Failed to execute command");
 
-        } else if let Some((session_name, sub_command)) = extract_run_command(&response_text) {
-            let full_cmd = format!("run {}", sub_command.trim());
-            println!("{}Echo: {}", LIGHT_BLUE, response_text.trim());
-            save_chat_log_entry(&home_dir, trimmed_input, &response_text, "assistant").await.unwrap();
-            messages.push(json!({"role": "assistant", "content": response_text.clone()}));
-            if let Err(e) = is_command_safe(&full_cmd) {
-                println!("{}Safety block: {}{}", YELLOW, e, RESET_COLOR);
-                save_chat_log_entry(&home_dir, trimmed_input, &format!("Blocked: {}", e), "assistant").await.unwrap();
-                messages.push(json!({"role": "assistant", "content": format!("Safety block: {}", e)}));
-                continue;
+                    let stdout = String::from_utf8_lossy(&output_cmd.stdout).to_string();
+                    let stderr = String::from_utf8_lossy(&output_cmd.stderr).to_string();
+
+                    db.log_tool_call("COMMAND", &command.trim(), &format!("STDOUT:\n{}\nSTDERR:\n{}", stdout.trim(), stderr.trim()))?;
+
+                    if !stdout.is_empty() {
+                        println!("{}Echo:\n{}\n{}", LIGHT_BLUE, &stdout.trim(), RESET_COLOR);
+                    }
+                    if !stderr.is_empty() {
+                        println!("{}Errors/Warnings:\n{}\n---", YELLOW, &stderr.trim());
+                    }
+
+                    let tool_content = format!(
+                        "Tool output from COMMAND '{}':\nReturn code: {}\nSTDOUT:\n{}\nSTDERR:\n{}\nUse this to decide next suggestion.",
+                        command.trim(),
+                        output_cmd.status.code().unwrap_or(-1),
+                        stdout,
+                        stderr
+                    );
+
+                    save_chat_log_entry(&home_dir, trimmed_input, &tool_content, "assistant").await.unwrap();
+
+                    messages.push(json!({
+                        "role": "assistant",
+                        "content": current_response
+                    }));
+
+                    messages.push(json!({
+                        "role": "tool",
+                        "content": tool_content
+                    }));
+                }
+
+            } else {
+                // No tool call — final answer
+                println!("{}Echo:\n{}\n{}", LIGHT_BLUE, current_response.trim(), RESET_COLOR);
+
+                save_chat_log_entry(&home_dir, trimmed_input, &current_response, "assistant").await.unwrap();
+
+                messages.push(json!({
+                    "role": "assistant",
+                    "content": &current_response,
+                }));
+
+                let total_chars: usize = messages.iter()
+                    .map(|m| m["content"].as_str().unwrap_or("").len())
+                    .sum();
+
+                if total_chars > 180_000 {
+                    summarize_context(&mut messages).await?;
+                }
+                break;
             }
 
-            let output = execute_in_session(home_dir.clone(), &session_name, full_cmd).await?;
+            // Call model again after tool result
+            let payload = json!({
+                "model": MODEL_NAME,
+                "messages": &messages,
+                "temperature": 0.7,
+                "max_tokens": 2048
+            });
 
-            let tool_content = format!(
-                "Tool output from SESSION '{}':\n{}",
-                session_name, output
-            );
+            let next = reqwest::Client::new()
+                .post(API_URL)
+                .json(&payload)
+                .send()
+                .await?
+                .json::<Value>()
+                .await?;
 
-            println!("{}Echo: Session output:\n{}{}", LIGHT_BLUE, output, RESET_COLOR);
-
-            save_chat_log_entry(&home_dir, trimmed_input, &tool_content, "assistant").await.unwrap();
-
-            messages.push(json!({
-            "role": "assistant",
-            "content": response_text
-            }));
-
-            messages.push(json!({
-                "role": "tool",
-                "content": tool_content
-            }));
-
-        } else if let Some(session_name) = extract_end_command(&response_text) {
-            println!("{}Echo: {}", LIGHT_BLUE, response_text.trim());
-            save_chat_log_entry(&home_dir, trimmed_input, &response_text, "assistant").await.unwrap();
-            messages.push(json!({"role": "assistant", "content": response_text.clone()}));
-            let _ = end_session(home_dir.clone(), &session_name).await;
-            let tool_content = format!("Session '{}' has been terminated.", session_name);
-
-            println!("{}Echo: {}", LIGHT_BLUE, tool_content);
-
-            save_chat_log_entry(&home_dir, trimmed_input, &tool_content, "assistant").await.unwrap();
-
-            messages.push(json!({
-            "role": "assistant",
-            "content": response_text
-            }));
-
-            messages.push(json!({
-                "role": "tool",
-                "content": tool_content
-            }));
-
-        } else if let Some(command) = extract_command(&response_text) {
-            println!("{}Echo: {}", LIGHT_BLUE, response_text.trim());
-            println!("{}Echo: Executing command:{}\n{}\n{}", LIGHT_BLUE, RESET_COLOR, command.trim(), RESET_COLOR);
-            save_chat_log_entry(&home_dir, trimmed_input, &response_text, "assistant").await.unwrap();
-            messages.push(json!({"role": "assistant", "content": response_text.clone()}));
-            if let Err(e) = is_command_safe(&command) {
-                println!("{}Safety block: {}{}", YELLOW, e, RESET_COLOR);
-                save_chat_log_entry(&home_dir, trimmed_input, &format!("Blocked: {}", e), "assistant").await.unwrap();
-                messages.push(json!({"role": "assistant", "content": format!("Safety block: {}", e)}));
-                continue;
-            }
-
-            let output_cmd = Command::new("sh")
-                .arg("-c")
-                .arg(command.trim())
-                .output()
-                .expect("Failed to execute command");
-
-            let stdout = String::from_utf8_lossy(&output_cmd.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output_cmd.stderr).to_string();
-
-            // Log COMMAND: calls to database
-            let command_summary = format!(
-                "STDOUT:\n{}\nSTDERR:\n{}",
-                stdout.trim(),
-                stderr.trim()
-            );
-            db.log_tool_call("COMMAND", &command.trim(), &command_summary)?;
-
-            if !stdout.is_empty() {
-                println!("{}Echo:\n{}\n{}", LIGHT_BLUE, &stdout.trim(), RESET_COLOR);
-            }
-            if !stderr.is_empty() {
-                println!("{}Errors/Warnings:\n{}\n---", YELLOW, &stderr.trim());
-            }
-
-            let tool_content = format!(
-                "Tool output from COMMAND '{}':\nReturn code: {}\nSTDOUT:\n{}\nSTDERR:\n{}\nUse this to decide next suggestion.",
-                command.trim(),
-                output_cmd.status.code().unwrap_or(-1),
-                stdout,
-                stderr
-            );
-
-            save_chat_log_entry(&home_dir, trimmed_input, &tool_content, "assistant").await.unwrap();
-
-            messages.push(json!({
-            "role": "assistant",
-            "content": response_text
-            }));
-
-            messages.push(json!({
-                "role": "tool",
-                "content": tool_content
-            }));
-
-        } else {
-            // Plain text response
-            println!("{}Echo:\n{}\n{}", LIGHT_BLUE, response_text.trim(), RESET_COLOR);
-
-            save_chat_log_entry(&home_dir, trimmed_input, &response_text, "assistant").await.unwrap();
-
-            messages.push(json!({
-                "role": "assistant",
-                "content": &response_text,
-            }));
-
-            let total_chars: usize = messages.iter()
-                .map(|m| m["content"].as_str().unwrap_or("").len())
-                .sum();
-
-            if total_chars > 180_000 {
-                summarize_context(&mut messages).await?;
-            }
+            current_response = next["choices"][0]["message"]["content"]
+                .as_str()
+                .unwrap_or("")
+                .trim()
+                .to_string();
         }
     }
 
@@ -388,7 +374,6 @@ pub static STOP_GENERATION: std::sync::atomic::AtomicBool = std::sync::atomic::A
     println!("\nSession ended normally. Goodbye!");
 
     Ok(())
-
 }
 
 async fn summarize_context(messages: &mut Vec<Value>) -> anyhow::Result<()> {
@@ -414,11 +399,10 @@ async fn summarize_context(messages: &mut Vec<Value>) -> anyhow::Result<()> {
         .unwrap_or("Summary failed.")
         .to_string();
 
-    // Keep system prompt + summary + last 4 turns
     let last_turns: Vec<Value> = messages.iter().rev().take(4).cloned().collect();
 
     let mut new_messages = vec![
-        messages[0].clone(), // system prompt
+        messages[0].clone(),
         json!({"role": "assistant", "content": summary}),
     ];
     new_messages.extend(last_turns.into_iter().rev());
@@ -429,9 +413,7 @@ async fn summarize_context(messages: &mut Vec<Value>) -> anyhow::Result<()> {
     Ok(())
 }
 
-// Real summarizer - calls the small model on port 8082
 async fn summarize_output(raw_output: &str) -> AnyhowResult<String> {
-    // FRESH CONTEXT EVERY TIME - no carryover
     let payload = json!({
         "model": "summarizer",
         "messages": [
@@ -475,7 +457,6 @@ async fn summarize_output(raw_output: &str) -> AnyhowResult<String> {
 
     Ok(response)
 }
-
 
 mod sessions;
 mod log;
