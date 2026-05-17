@@ -1,11 +1,10 @@
 # Echo_rust_agent_proxy
 Continuation of [Echo tmux agentv3](https://github.com/charlesericwilson-portfolio/Echo_tmux_agentv3) and adds proxy tool calls, output summarization, and database support. 
-```mermaid
 flowchart TD
     A[User sends prompt] --> B[LLM / Echo]
     B --> C[LLM generates reply]
     C --> D[Tool Extractor checks for session:NAME or COMMAND:]
-    
+   
     D -->|Session command found| E[Session Manager]
     E --> F[Auto-create tmux session if needed]
     F --> G[Send command to tmux session]
@@ -14,18 +13,19 @@ flowchart TD
     I --> J[Capture only new output between markers]
     J --> K[Update Database with clean output]
     K --> L[Send tool result back to LLM as 'tool' message]
-    
+   
     D -->|No session command| M[Execute as normal COMMAND:]
-    M --> N[Return output to LLM]
-    
+    M --> O[Save COMMAND result to Database]
+    O --> N[Send tool result back to LLM as 'tool' message]
+   
     L --> B
     N --> B
-    
+   
     style A fill:#4ade80,stroke:#166534
     style B fill:#60a5fa,stroke:#1e40af
     style E fill:#facc15,stroke:#854d0e
     style K fill:#c084fc,stroke:#6b21a8
-```
+    style O fill:#c084fc,stroke:#6b21a8
 ## Echo Rust Wrapper v5 (In Testing)
 
 **Current Version:** Rust v5 (Python proxy was v4)
@@ -47,13 +47,14 @@ This is the active development version of **Echo** — a lightweight, local red-
 
 ### Current Status – In Active Testing
 - COMMAND method is stable and reliable
-- SESSION method works well for basic persistence
+- SESSION method works well for everything except nmap
 - Output capture + summarizer flow is functional
 - Deny list is active
 - Logging is working and generating clean training data
+- Fixed stoping after every tool call model now can chain tools across turns when permitted.
 - For build details and screenshots go to [Doc/progress_log.md](https://github.com/charlesericwilson-portfolio/Echo_rust_agent_proxyv5/blob/main/echo_rust_agent_proxy/Doc/progress_log.md)
 
-Persistent sessions with complex tools (full msfconsole workflows) are still being tuned. Context management and summarizer behavior continue to be refined. Database integration for auditing complete.
+Persistent sessions with complex tools (full msfconsole workflows) are still being tuned. Context management and summarizer behavior continue to be refined. Database integration for all tool calls for auditing complete.
 
 ### Quick Start
 
